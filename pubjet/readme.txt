@@ -1,0 +1,175 @@
+=== Pubjet | پاب‌جت ===
+Contributors: mojtabam2021
+Tags: seo,reportage
+Stable tag: 5.2.0
+Tested up to: 6.8.1
+Requires PHP: 7.2.5
+License: GPL v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.txt
+
+== Description ==
+<p>پاب‌جت دستیار شما در انتشار رپورتاژ آگهی است. در واقع پاب‌جت امکان انتشار خودکار رپورتاژ را فراهم می‌آورد.</p>
+
+<strong>Pubjet Plugin</strong>
+
+The Pubjet plugin is a powerful tool designed to integrate seamlessly with the Triboon platform, a third-party service that enables you to create, control, and publish various types of content on your website. With this plugin, you can effortlessly prepare and publish guest posts, review posts, suggested posts, and advertorial content.
+
+<strong>About Triboon</strong>
+
+<a href="https://triboon.net/">Triboon</a> is the third-party platform on which the Pubjet plugin relies. It provides a user-friendly environment for content creation and offers robust tools for developing and controlling diverse content types.
+
+<strong>Data Transmission and Legal Considerations</strong>
+
+By using the Pubjet plugin, data may be transmitted between your website and the Triboon platform. This includes information related to content creation, user interactions, and other relevant data points. It's important to be aware of the following:
+<ul>
+ 	<li>Link to Triboon:<a href="https://triboon.net/"> Triboon Platform</a></li>
+ 	<li>Triboon Terms of Use and Privacy Policy:<a href="https://panel.triboon.net/terms/publisher"> Terms of Use</a></li>
+</ul>
+Legal Compliance
+
+To ensure legal compliance regarding data transmissions, please review and adhere to the terms and conditions outlined in Triboon's<a href="https://panel.triboon.net/terms/publisher"> Terms of Use</a> and<a href="https://panel.triboon.net/terms/publisher"> Privacy Policy</a>. By using the Pubjet plugin, you acknowledge and accept any legal responsibilities associated with data transmissions between your website and the Triboon platform.
+
+<strong>Getting Started</strong>
+
+To integrate the Pubjet plugin with your website and leverage the features of the Triboon platform, follow these steps:
+<ul>
+ 	<li>Install the Pubjet Plugin</li>
+ 	<li>Configure API Settings</li>
+ 	<li>Create and Publish Content: Explore the powerful features of Triboon through the Pubjet plugin to create and publish engaging guest posts, reviews, suggested posts, and advertorial content.</li>
+</ul>
+For further details on Triboon's policies, refer to their official documentation, and contact their support for specific inquiries.
+
+== Short Description ==
+Pubjet is your assistant in publishing advertisement reportage. In fact, Pubjet allows the automatic publication of reportage.
+
+== Installation ==
+After installing and activating the plugin, go to Pubjet settings menu and enter the connection token to your Triboon account and save the settings.
+
+== Upgrade Notice ==
+لطفا اگه از نسخه های قبل از 2.7.1 استفاده می کنید، پس از بروزرسانی به نسخه جدید یکبار تنظیمات توکن را مجددا انجام دهید.
+
+== Changelog ==
+
+= 5.2.0 =
+* امکان دریافت عکس شاخص برای رپورتاژ
+* امکان درج لینک‌های امبد شده در متن رپورتاژ
+* نمایش وضعیت توکن در مرحله اعتبارسنجی با رنگ‌بندی
+* حل مشکل خالی نشدن سلکت‌باکس دسته‌بندی پس از حذف همه موارد
+* حل مشکل تأخیر در بارگذاری دسته‌بندی‌ها و جلوگیری از درج بیش از ۱۰ مورد
+* تنظیم خودکار ارتفاع باکس دسته‌بندی پلن‌ها
+* ریفکتور بخش دسته‌بندی رپورتاژ
+* بهینه‌سازی قابل‌توجه بخش جستجوی دسته‌بندی و کاهش درخواست‌های سمت سرور
+
+= 5.1.1 =
+* رفع خطای توکن در ارسال اطلاعات پلاگین به API pubjet-info در تریبون
+
+= 5.1.0 =
+* رفع خطای عدم لود تنظیمات پابجت در برخی سایت ها
+* رفع خطای اعتبارسنجی توکن و خطای تایم اوت 5 ثانیه
+* افزودن فانکشنالیتی دکمه کپی اطلاعات رپورتاژ در صفحه ویرایش رپورتاژ
+* ریفکتور مایکریت تنظیمات قدیمی
+* ریفکتور بخش ذخیره تنظیمات پابجت
+* افزودن بررسی نوع لیگ و فعالسازی انتشار دستی در بخش اعتبارسنجی توکن
+
+= 5.0.1 =
+* رفع خطای عدم اتصال به Api تریبون
+
+= 5.0.0 =
+* انتشار رپورتاژ در یک دسته‌بندی تصادفی وردپرس در صورت نبود دسته‌بندی یا پلن
+* رفع خطای «دسته‌بندی نمی‌تواند خالی باشد» در صفحه تنظیمات عمومی
+* امکان درج و ویرایش متا تایتل، متا دیسکریپشن و چکیده اختصاصی در رپورتاژ از سوی تریبون و ناشر
+* غیرفعال بودن تب "پیشرفته" تا زمان انتخاب دسته‌بندی پلن و ذخیره تنظیمات
+* رفع خطای عدم حذف پلاگین در حالت (development)
+* ریفکتور کلاس متاباکس برای بهبود توسعه‌پذیری
+* ذخیره توکن پیش از اعتبارسنجی جهت تایید ارتباط از سمت تریبون
+* پاک‌سازی و ریفکتور کدهای اضافی و قدیمی
+
+= 4.9.2 =
+* رفع خطای عدم نمایش صفحه تنظیمات پابجت در برخی سایت ها
+* افزودن رپورتاژهای با وضعیت در انتظار بررسی به لیست رپورتاژ ها در لیست پست ها
+
+= 4.9.0 =
+* افزودن امکان تعیین دسته‌بندی برای هر پلن در پابجت
+* تغییر UI صفحه عمومی تنظیمات پابجت
+* تغییر ساختار عملیات های اعتبارسنجی توکن و ذخیره تنظیمات
+* بررسی توکن با تعویض توکن به صورت خودکار
+
+= 4.8.0 =
+* رفع خطای "429 Too Many Requests" و جلوگیری از درخواست‌های تکراری API در ثبت وضعیت رپورتاژ منتشر شده.
+* رفع خطای SSL Verify در بخش بررسی به‌روزرسانی پلاگین.
+* رفع خطای تایم‌اوت (Timeout) در ارتباط با API pubjet-info در تریبون.
+* رفع مشکل انتشار خودکار رپورتاژ زمان‌بندی‌شده علیرغم فعال بودن گزینه "تأیید و انتشار دستی".
+* رفع مشکل ایجاد دو نسخه از یک رپورتاژ در ستاره و عدم نمایش لینک در پنل با افزودن کش ۳۰ ثانیه‌ای به API انتشار رپورتاژ.
+* بهینه‌سازی و بازنویسی بخش بررسی به‌روزرسانی PubJet برای بهبود عملکرد.
+* رفع خطای sentry exception در بخش‌هایی از کد.
+
+= 4.7.0 =
+*نمایش آپشن تایید و انتشار دستی فقط برای لیگ یکی ها
+* ارسال وضعیت آپشن تایید و انتشار دستی به پنل تریبون
+* چک کردن وضعیت نمایش این آپشن در هنگام آپدیت افزونه و در هنگام ذخیره تنظیمات
+
+= 4.6.0 =
+* تصحیح نگارشی و افزودن توضیحات به آپشن‌های پلاگین
+* افزودن نمایش اعلان در داشبورد وردپرس هنگام در دسترس بودن نسخه جدید پلاگین
+* اصلاح برخی از استایل های رابط کاربری پلاگین
+
+= 4.5.0 =
+* اجباری شدن انتخاب دسته‌بندی پیش‌فرض: کاربر باید حتماً یک دسته‌بندی پیش‌فرض انتخاب کند
+* افزودن قابلیت جستجو در دسته‌بندی پیش‌فرض: امکان جستجوی سریع و آسان دسته‌ها
+* تجمیع دسته‌بندی پیش‌فرض و دسته‌بندی همگام‌سازی: بهینه‌سازی فرآیند مدیریت دسته‌بندی‌ها
+* اصلاح فرآیند همگام‌سازی دسته‌بندی: تغییر انتخاب دسته‌بندی‌ها از چک‌باکس به مولتی سلکت برای انعطاف بیشتر
+* محدودیت تعداد دسته‌بندی‌ها: کاربر می‌تواند حداقل 1 و حداکثر 10 دسته‌بندی انتخاب کند
+* چند بهبود روی برخی از کد ها
+
+= 4.4.0 =
+* رفع باگ از دست رفتن تنظیمات هنگام غیرفعال و فعال شدن دوباره پلاگین
+* افزودن متد دریافت دسته بندی ها از طریق کوئری استرینگ
+* رفع باگ اختصاص نویسنده رپورتاژ به ازای هر دسته بندی
+* رفع باگ و بهبود بررسی و اعتبارسنجی توکن در زمان ذخیره تنظیمات
+* رفع باگ اعتبارسنجی توکن در هنگام  گرفتن وضعیت پلاگین به صورت کوئری استرینگ
+
+= 4.3.1 =
+* رفع باگ : انتشار رپورتاژ با اکشن کوئری استرینگ ( Action Query String )
+
+= 4.3.0 =
+* افزودن بخش انتخاب نویسنده رپورتاژ به ازای هر دسته بندی
+* بهبود رابط کاربری انتخاب نویسنده رپوتاژ به صورت پیش فرض از دکمه رادیویی به سلکت باکس
+* درج منبع رپورتاژ برای رپورتاژهای منتشرشده با پابجت به صورت آپشنال
+* افزودن آدرس api های وضعیت پلاگین و دسته بندی های سایت به اطلاعات ارسالی به تریبون
+
+= 4.1.1 =
+* حذف لیبل پست منتشر شده توسط پابجت
+
+= 4.1.0 =
+* اضافه شد: سینک کردن آدرس رپورتاژ و بک لینک های ناموفق
+* بهینه سازی: سیستم ذخیره سازی تنظیمات افزونه
+
+= 4.0.0 =
+* اضافه شد: ابزارک اختصاصی برای نمایش بک لینک ها
+* اضافه شد: کدکوتاه اختصاصی برای نمایش بک لینک ها([pubjet_backlinks])
+* اضافه شد: ویجت المنتوری اختصاصی برای نمایش بک لینک ها
+* اضافه شد: ترجمه آدرس نوشته رپورتاژ با استفاده از Google Translate
+* اضافه شد: سیستم پردازش اطلاعات با استفاده از Query String
+* بهبود یافته: آی پی آی بروزرسانی رپورتاژ
+* سازگاری با نسخه های قدیمی وردپرس(7.2.0 به بالا)
+* بهبود یافته: افزایش سرعت انتشار رپورتاژ با بهینه سازی REST API
+* رفع باگ: همگام سازی دسته بندی ها منتخب
+* رفع باگ: انتشار رپورتاژ در دسته بندی مرتبط با پلن
+
+= 2.7.1 =
+* بازنویسی کامل زیر ساخت انتشار رپورتاژ و افزایش سرعت ثبت رپورتاژ
+* جلوگیری از کاهش سرعت وردپرس به دلیل عدم اجرا شدن کوئری در صفحات غیر مرتبط
+* بازنویسی کامل پنل تنظیمات افزونه و افزایش تجربه کاربری
+* جلوگیری از بارگذاری منابع افزونه در صفحات غیر مرتبط
+* تنظیم برای حذف تمامی داده های افزونه پس از حذف افزونه
+* اضافه شدن سیستم خطایابی داخلی برای ردگیری سریعتر خطاها
+* بهینه سازی زیر ساخت ذخیره سازی تنظیمات افزونه. لطفا اگه از نسخه های قبل از 2.7.1 استفاده می کنید، پس از بروزرسانی به نسخه جدید یکبار تنظیمات توکن را مجددا انجام دهید.
+
+= 1.0.0 =
+* با افختار برای وب فارسی منتشر شد
+
+== Screenshots ==
+1. Settings
+2. Debugging
+3. Required PHP Modules
+4. Cleanup Database After Uninstall
