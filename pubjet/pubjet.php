@@ -6,7 +6,7 @@
     Author URI:  https://triboon.net
     License: GPL v2 or later
     License URI: http://www.gnu.org/licenses/gpl-2.0.txt
-    Version: 5.2.0
+    Version: 5.4.0
 */
 
 use triboon\pubjet\includes\enums\EnumOldOptions;
@@ -79,6 +79,7 @@ if (!class_exists('Pubjet')) {
          */
         public function onPluginLoaded() {
             Initializer::getInstance();
+            $this->maybeUpgrade();
         }
 
         /**
@@ -107,6 +108,7 @@ if (!class_exists('Pubjet')) {
             $this->defineConstant('PUBJET_VERSION', $this->getScriptsVersion());
             $this->defineConstant('PUBJET_DB_VERSION', '1.0.0');
             $this->defineConstant('PUBJET_API_ROOT', 'https://api.triboon.net');
+            $this->defineConstant('PUBJET_CDN_ROOT', 'https://cdn.triboon.net/media/reportage_images');
             $this->defineConstant('PUBJET_TBL_NAME', 'pubjet_reportages');
             $this->defineConstant('PUBJET_POST_TYPE', 'post');
             $this->defineConstant('PUBJET_DIR_PATH', plugin_dir_path(__FILE__));
@@ -176,18 +178,6 @@ if (!class_exists('Pubjet')) {
             return $plugin_data['Version'];
         }
 
-        /**
-         * @return void
-         */
-        private function trackActivationVersion() {
-            global $pubjet_settings;
-            $activation_version = pubjet_isset_value($pubjet_settings[EnumOptions::ActivationVersion]);
-            $current_version = $this->getVersion();
-            if ($activation_version !== $current_version) {
-                $pubjet_settings[EnumOptions::ActivationVersion] = $current_version;
-                update_option(EnumOptions::Settings, $pubjet_settings);
-            }
-        }
 
         /**
          * @return void
@@ -274,16 +264,37 @@ if (!class_exists('Pubjet')) {
             $GLOBALS['pubjet_options']  = $GLOBALS['pubjet_settings'];
         }
 
+
+        /**
+         * @return void
+         * @since  5.3.0
+         * @author Triboon
+         */
+        private function maybeUpgrade() {
+            global $pubjet_settings;
+
+            $stored_version = $pubjet_settings[EnumOptions::ActivationVersion] ?? null;
+            $current_version = $this->getVersion();
+
+            if ($stored_version !== $current_version) {
+
+                pubjet_sync_settings();
+                pubjet_sync_categories();
+                pubjet_delete_first_image_option();
+
+                $pubjet_settings[EnumOptions::ActivationVersion] = $current_version;
+                update_option(EnumOptions::Settings, $pubjet_settings);
+            }
+        }
+
         /**
          * @return void
          * @since  1.0
          * @author Triboon
          */
         public function onActivation() {
-            pubjet_sync_settings();
             pubjet_send_plugin_status_to_api('active');
             $this->migrate();
-            $this->trackActivationVersion();
             flush_rewrite_rules();
         }
 

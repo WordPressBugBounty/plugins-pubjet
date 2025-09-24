@@ -14,6 +14,8 @@ class Filters extends Singleton {
     public function init() {
         add_filter("display_post_states", [$this, "displayPostStates"], 15, 2);
         add_filter('parse_query', [$this, "adminFilterPosts"], 15);
+        add_filter('views_edit-post', [$this,'pubjet_reportage_count'] , 15);
+
         // add_filter("the_content", [$this, "filterTheContent"], 0, 2);
         add_filter("the_content", [$this, "deleteFirstImage"], 15, 2);
         add_filter("the_content", [$this, "addReportageSource"], 15, 2);
@@ -27,7 +29,10 @@ class Filters extends Singleton {
 
         add_filter("pubjet_new_reportage_post_args", [$this, "addReportageTags"], 15, 2);
         // add this if its necessary
-        // add_filter('admin_post_thumbnail_html',[$this,'regenerateFeaturedImage'], 15, 3);
+        add_filter('admin_post_thumbnail_html',[$this,'regenerateFeaturedImage'], 15, 3);
+        add_filter('the_content', [$this, 'useCdnForReportageImages'], 10);
+        add_filter('post_thumbnail_html', [$this, 'useCdnForFeaturedImage'], 10, 5);
+
 
     }
 
@@ -104,6 +109,12 @@ class Filters extends Singleton {
         return $actions;
     }
 
+    /**
+     * @param $content
+     * @param $post_id
+     * @param $thumbnail_id
+     * @return mixed|string
+     */
     public function regenerateFeaturedImage($content, $post_id, $thumbnail_id )
     {
         if(pubjet_is_reportage($post_id)){
@@ -129,18 +140,43 @@ class Filters extends Singleton {
      * @return string
      */
     public function deleteFirstImage($content) {
-        global $pubjet_settings;
-        if (!pubjet_is_reportage(get_the_ID())) {
+        global $wpdb;
+
+        $post_id = get_the_ID();
+        if(!pubjet_is_reportage($post_id)) return $content;
+
+        $cache_key = "pubjet_meta_$post_id";
+        $meta_cache = wp_cache_get($cache_key, 'pubjet');
+
+        if ($meta_cache === false) {
+            $meta_data = $wpdb->get_results($wpdb->prepare("
+                SELECT meta_key, meta_value 
+                FROM {$wpdb->postmeta} 
+                WHERE post_id = %d 
+                AND meta_key IN ('pubjet_reportage_id', 'pubjet_delete_first_image')
+            ", $post_id), OBJECT_K);
+
+            $meta_cache = [
+                'has_reportage'      => isset($meta_data[EnumPostMetakeys::ReportageId]),
+                'delete_first_image' => isset($meta_data[EnumPostMetakeys::deleteFirstImage])
+                    ? 1
+                    : false
+            ];
+
+            wp_cache_set($cache_key, $meta_cache, 'pubjet', HOUR_IN_SECONDS);
+        }
+
+        if (!$meta_cache['has_reportage'] || !$meta_cache['delete_first_image']) {
             return $content;
         }
-        $status = pubjet_isset_value($pubjet_settings['deleteFirstImage']);
-        if (!$status) {
-            return $content;
+
+        $pattern_p = '/<p[^>]*>\s*(?:<strong[^>]*>\s*)?<img[^>]*>(?:\s*<\/strong>)?\s*<\/p>/i';
+        if (preg_match($pattern_p, $content)) {
+            return preg_replace($pattern_p, '', $content, 1);
         }
-        // الگوی جستجو برای اولین عکس در محتوا
-        $pattern = '/<p>\s*(<strong>\s*)?<img[^>]+>(\s*<\/strong>)?\s*<\/p>|<img[^>]+>/i';
-        // جایگزینی اولین مطابقت با رشته خالی
-        return preg_replace($pattern, '', $content, 1);
+
+        $pattern_img = '/<img[^>]*>/i';
+        return preg_replace($pattern_img, '', $content, 1);
     }
 
 
@@ -150,46 +186,75 @@ class Filters extends Singleton {
      */
     public function addReportageSource($content) {
         global $pubjet_settings;
+
         if (!pubjet_is_reportage(get_the_ID())) {
             return $content;
         }
+
         $status = pubjet_isset_value($pubjet_settings['addReportageSource']);
         if (!$status) {
             return $content;
         }
 
+        if (empty(trim($content))) {
+            return $content;
+        }
+
         libxml_use_internal_errors(true);
         $dom = new \DOMDocument();
+        $dom->encoding = 'UTF-8';
         libxml_clear_errors();
-        if (!$dom->loadHTML($content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD)) {
+
+        $html_content = mb_convert_encoding($content, 'HTML-ENTITIES', 'UTF-8');
+
+        if (!$dom->loadHTML('<?xml encoding="UTF-8">' . $html_content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD)) {
             return $content;
         }
 
         $links = $dom->getElementsByTagName('a');
-        $follow_links = [];
+        $valid_links = [];
+
         foreach ($links as $link) {
             $rel = $link->getAttribute('rel');
             $href = $link->getAttribute('href');
-            if (!empty($href) && filter_var($href, FILTER_VALIDATE_URL) && (empty($rel) || strpos($rel, 'nofollow') === false)) {
-                $follow_links[] = $href;
+
+            if (!empty($href) &&
+                filter_var($href, FILTER_VALIDATE_URL) &&
+                (empty($rel) || strpos($rel, 'nofollow') === false)) {
+
+                $valid_links[] = $href;
             }
         }
 
-        if (empty($follow_links)) {
+        if (empty($valid_links)) {
             return $content;
         }
 
-        $link_counts = array_count_values($follow_links);
-        arsort($link_counts);
-        $most_repeated_link = array_key_first($link_counts);
+        $domain_counts = [];
 
-        if (!$most_repeated_link) {
-            return $content;
+        foreach ($valid_links as $link) {
+            $parsed_url = parse_url($link);
+
+            if (isset($parsed_url['host'])) {
+                $base_domain = strtolower(preg_replace('/^www\./', '', $parsed_url['host']));
+                if (isset($domain_counts[$base_domain])) {
+                    $domain_counts[$base_domain]++;
+                } else {
+                    $domain_counts[$base_domain] = 1;
+                }
+            }
         }
 
-        $parsed_url = parse_url($most_repeated_link);
-        $base_domain = preg_replace('#^(www\.)#', '', $parsed_url['host']);
-        $content .= '<p> منبع خبر : ' . esc_html($base_domain) . '</p>';
+        if (empty($domain_counts)) {
+            return $content;
+        }
+        arsort($domain_counts);
+
+        $most_frequent_domain = array_key_first($domain_counts);
+
+        $source_text = '<p class="news-source">منبع خبر: <strong>' . esc_html($most_frequent_domain) . '</strong></p>';
+
+        $content .= $source_text;
 
         return $content;
     }
@@ -316,4 +381,92 @@ class Filters extends Singleton {
         return $tags;
     }
 
+    /**
+     * @param $views
+     * @return mixed
+     */
+    public function pubjet_reportage_count($views) {
+        $count = pubjet_get_reportage_count();
+        $current_class = (isset($_GET['reportage']) && $_GET['reportage'] == 'true') ? 'current' : '';
+
+        $views['reportages'] = sprintf(
+            '<a href="%s" class="%s">%s <span class="count">(%d)</span></a>',
+            admin_url('edit.php?post_type=post&reportage=true'),
+            $current_class,
+            pubjet__('reportage'),
+            $count
+        );
+
+        return $views;
+    }
+
+    /**
+     * @param $content
+     * @return array|mixed|string|string[]|null
+     */
+    public function useCdnForReportageImages($content) {
+
+        global $post;
+        if (!$post || !pubjet_is_reportage($post->ID)) return $content;
+
+        $use_cdn = get_post_meta($post->ID, 'pubjet_use_cdn', true);
+        if ($use_cdn !== '1') return $content;
+
+        $cache_key = 'pubjet_cdn_content_' . $post->ID;
+
+        $cached = get_transient($cache_key);
+        if ($cached) {
+            return $cached;
+        }
+
+        $processed = preg_replace_callback(
+            '/<img([^>]*data-attach="([^"]+)"[^>]*)>/i',
+            function($matches) {
+                $img_tag = $matches[0];
+                $original_url = PUBJET_CDN_ROOT . '/' . $matches[2];
+                return preg_replace(
+                    '/src="[^"]*"/',
+                    'src="' . esc_attr($original_url) . '"',
+                    $img_tag
+                );
+            },
+            $content
+        );
+
+        set_transient($cache_key, $processed, DAY_IN_SECONDS);
+
+        return $processed;
+    }
+
+
+    /**
+     * @param $html
+     * @param $post_id
+     * @param $post_thumbnail_id
+     * @param $size
+     * @param $attr
+     * @return array|string|string[]|null
+     */
+    public function useCdnForFeaturedImage($html, $post_id, $post_thumbnail_id, $size, $attr) {
+        if (!pubjet_is_reportage($post_id)) return $html;
+
+        $use_cdn = get_post_meta($post_id, 'pubjet_use_cdn', true);
+        if ($use_cdn !== '1') return $html;
+
+
+        $data_attach = get_post_meta($post_id, 'pubjet_thumbnail_data_attach', true);
+        if (empty($data_attach)) {
+            $file_path = get_attached_file($post_thumbnail_id);
+            if (!$file_path) return $html;
+            $data_attach = basename($file_path);
+        }
+
+        $cdn_url = PUBJET_CDN_ROOT . '/' . $data_attach;
+
+        return preg_replace(
+            '/src="[^"]*"/',
+            'src="' . esc_attr($cdn_url) . '"',
+            $html
+        );
+    }
 }

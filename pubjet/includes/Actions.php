@@ -12,18 +12,20 @@ use triboon\pubjet\includes\widgets\Backlinks;
 
 defined('ABSPATH') || exit;
 
-class Actions extends Singleton {
+class Actions extends Singleton
+{
 
     use Utils;
 
     /**
      * @return void
      */
-    public function init() {
+    public function init()
+    {
         add_action("admin_menu", [$this, "registerMenu"], 15);
-        add_action("admin_footer", [$this, "adminFooterScripts"], 15);
+//        add_action("admin_footer", [$this, "adminFooterScripts"], 15);
         add_action("wp_head", [$this, "publishMissedSchedulePosts"], 15);
-        add_action("wp_footer", [$this, "addScriptToReportage"], 15);
+//        add_action("wp_footer", [$this, "addScriptToReportage"], 15);
         add_action("admin_head", [$this, "pluginFont"], 15);
         add_action("wp_head", [$this, "alignReportageImagesCenter"], 15);
         add_action('created_term', [$this, 'createCategory'], 15, 5);
@@ -49,14 +51,31 @@ class Actions extends Singleton {
 
         add_action('init', [$this, 'showSiteCategories'], 15);
         add_action('pubjet_create_reportage', [$this, 'processCreateReportage'], 15);
-        add_action('save_post',[$this,'savePubjetMetaData']);
-        add_action('wp_head', [$this,'addMetaDataToFrontPages'] , 15);
+        add_action('save_post', [$this, 'savePubjetMetaData']);
+        add_action('wp_head', [$this, 'addMetaDataToFrontPages'], 15);
+
+
+//        add_action('pre_post_update', [$this, 'updateOldReportagePermalink'] );
+        add_action('wp_after_insert_post', [$this, 'sendPermalinkUpdateToApi'], 15, 4);
+
+        add_action('save_post', [$this, 'pubjet_reportage_count_clear_cache']);
+        add_action('delete_post', [$this, 'pubjet_reportage_count_clear_cache']);
+        add_action('updated_postmeta', [$this, 'pubjet_clear_cache_on_meta_update'], 10, 3);
+        add_action('added_postmeta', [$this, 'pubjet_clear_cache_on_meta_update'], 10, 3);
+        add_action('deleted_postmeta', [$this, 'pubjet_clear_cache_on_meta_delete'], 10, 1);
+
+        add_action('save_post', [$this, 'clear_reportage_cdn_cache'], 10, 3);
+        add_action('save_post', [$this, 'save_cdn_checkbox'],9);
+        add_action('save_post', [$this, 'clearMetaCacheOnSave'], 10, 3);
+
+
     }
 
     /**
      * @return void
      */
-    public function showPluginStatus() {
+    public function showPluginStatus()
+    {
         $action = $this->get('action');
         if (EnumActions::PubjetStatus !== $action) {
             return;
@@ -72,7 +91,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function showSiteCategories() {
+    public function showSiteCategories()
+    {
         $action = $this->get('action');
         if (EnumActions::PubjetCategories !== $action) {
             return;
@@ -86,11 +106,11 @@ class Actions extends Singleton {
     }
 
 
-
     /**
      * @return void
      */
-    public function createBacklinkByActionQueryString() {
+    public function createBacklinkByActionQueryString()
+    {
         $action = $this->get('action');
         if (EnumActions::CreateBacklink !== $action) {
             return;
@@ -121,7 +141,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function createReportageByActionQueryString() {
+    public function createReportageByActionQueryString()
+    {
         $action = $this->get('action');
         if (EnumActions::CreateReportage !== $action) {
             return;
@@ -160,19 +181,20 @@ class Actions extends Singleton {
      * @throws \Exception
      * @since 4.0.0
      */
-    public function processCreateReportage($reportage) {
+    public function processCreateReportage($reportage)
+    {
         $lock_key = 'pubjet_reportage_creation_lock_' . $reportage->id;
         $lock_time = 30;
 
         $log_data = [
-            'reportage_id'    => pubjet_isset_value($reportage->id),
+            'reportage_id' => pubjet_isset_value($reportage->id),
             'reportage_title' => pubjet_isset_value($reportage->title),
         ];
 
         if (get_transient($lock_key)) {
             $duplicate_error_message = 'در حال پردازش درخواست مشابه. لطفاً منتظر بمانید.';
             pubjet_log(['Error' => ['message' => $duplicate_error_message] + $log_data]);
-            pubjet_log_sentry($duplicate_error_message,['message' => $duplicate_error_message] + $log_data);
+            pubjet_log_sentry($duplicate_error_message, ['message' => $duplicate_error_message] + $log_data);
             $this->error($duplicate_error_message, 429);
             return;
         }
@@ -182,20 +204,24 @@ class Actions extends Singleton {
             $wp_post_id = ReportagePost::insert($reportage);
 
             if (!$wp_post_id || is_wp_error($wp_post_id)) {
+                if (is_wp_error($wp_post_id) && $wp_post_id->get_error_code() === 'reportage-exists') {
+                    throw new \Exception($wp_post_id->get_error_message(), 409); // 409 for duplicate reportage
+                }
                 throw new \Exception(is_wp_error($wp_post_id) ? $wp_post_id->get_error_message() : 'خطای نامشخصی در ثبت نوشته رپورتاژ.');
             }
 
             pubjet_log($reportage->wp_post_id ? 'Post updated: ' . $reportage->wp_post_id : 'Post created: ' . $wp_post_id);
 
             $this->success([
-                'postId'      => $wp_post_id,
-                'postStatus'  => get_post_status($wp_post_id) ?: 'Unknown',
+                'postId' => $wp_post_id,
+                'postStatus' => get_post_status($wp_post_id) ?: 'Unknown',
                 'reportageId' => $reportage->id,
             ]);
         } catch (\Exception $e) {
             pubjet_log(['Error' => $e->getMessage()] + $log_data);
-            pubjet_log_sentry($e->getMessage(), ["message" =>  $e->getMessage()] + $log_data);
-            $this->error($e->getMessage(), 400);
+            pubjet_log_sentry($e->getMessage(), ["message" => $e->getMessage()] + $log_data);
+            $status_code = $e->getCode() ?: 400;
+            $this->error($e->getMessage(), $status_code);
         } finally {
             delete_transient($lock_key);
         }
@@ -204,7 +230,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function registerElementorWidgets() {
+    public function registerElementorWidgets()
+    {
         /**
          * The pubjet_elementor_widgets_instances filter.
          *
@@ -221,7 +248,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function registerWidgets() {
+    public function registerWidgets()
+    {
         /**
          * The pubjet_widgets_classes filter.
          *
@@ -238,7 +266,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function createDbTables() {
+    public function createDbTables()
+    {
         /**
          * The pubjet_database_tables filter.
          *
@@ -253,20 +282,21 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function changeReportageAuthor($reportage_post_id, $reportage) {
+    public function changeReportageAuthor($reportage_post_id, $reportage)
+    {
 
 
         global $pubjet_settings;
-        $status    = pubjet_isset_value($pubjet_settings['repauthor']['status']);
-        $default_author_id  = pubjet_isset_value($pubjet_settings['repauthor']['authorId']);
-        $authorCategory = pubjet_isset_value($pubjet_settings['repauthor']['authorCategory'] , []);
+        $status = pubjet_isset_value($pubjet_settings['repauthor']['status']);
+        $default_author_id = pubjet_isset_value($pubjet_settings['repauthor']['authorId']);
+        $authorCategory = pubjet_isset_value($pubjet_settings['repauthor']['authorCategory'], []);
 
         if (!$default_author_id || !$status) {
             return;
         }
         pubjet_log("======= Change Reportage Author =======");
 
-        $reportage_post              = get_post($reportage_post_id);
+        $reportage_post = get_post($reportage_post_id);
         $reportage_post->post_author = $default_author_id;
 
         $reportage_category = wp_get_post_categories($reportage_post_id);
@@ -296,7 +326,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function publishFutureBacklinks() {
+    public function publishFutureBacklinks()
+    {
         // بررسی اگر transient وجود دارد یا نه
         if (false === get_transient(EnumTransients::PublishFutureBacklinks)) {
             // ارسال ورژن افزونه به API
@@ -320,7 +351,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function checkAndSendVersion() {
+    public function checkAndSendVersion()
+    {
         // بررسی اگر transient وجود دارد یا نه
         if (false === get_transient('pubjet_daily_plugin_status_check')) {
             // ارسال ورژن افزونه به API
@@ -333,13 +365,17 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function syncSettingsAfterUpdate($upgrader_object, $options) {
-        if ($options['action'] == 'update' && $options['type'] == 'plugin' && isset($options['plugins'])) {
+    public function syncSettingsAfterUpdate($upgrader_object, $options)
+    {
+        error_log("begin syncSettingsAfterUpdate");
+        if ( in_array( $options['action'], ['update', 'install'], true )
+            && $options['type'] === 'plugin'
+            && isset($options['plugins']) ) {
             foreach ($options['plugins'] as $plugin) {
-                if ($plugin == PUBJET_PLUGIN_BASE) {
+                if ($plugin === PUBJET_PLUGIN_BASE) {
                     pubjet_sync_settings();
                     pubjet_sync_categories();
-                    break;
+                    pubjet_delete_first_image_option();
                 }
             }
         }
@@ -348,7 +384,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function reportageCustomFields($post_id, $reportage_data) {
+    public function reportageCustomFields($post_id, $reportage_data)
+    {
         global $pubjet_settings;
         $status = pubjet_isset_value($pubjet_settings['metakeys']['status']);
         if (!$status) {
@@ -369,7 +406,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function createCategory($term_id, $tt_id, $taxonomy, $args) {
+    public function createCategory($term_id, $tt_id, $taxonomy, $args)
+    {
         if ('category' !== $taxonomy) {
             return;
         }
@@ -383,7 +421,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function deleteCategory($term, $tt_id, $taxonomy, $deleted_term) {
+    public function deleteCategory($term, $tt_id, $taxonomy, $deleted_term)
+    {
         if ('category' !== $taxonomy) {
             return;
         }
@@ -393,7 +432,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function alignReportageImagesCenter() {
+    public function alignReportageImagesCenter()
+    {
         global $pubjet_settings;
         if (!is_singular('post')) {
             return;
@@ -420,7 +460,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function pluginFont() {
+    public function pluginFont()
+    {
         ?>
         <style>
             @font-face {
@@ -451,7 +492,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function publishMissedSchedulePosts() {
+    public function publishMissedSchedulePosts()
+    {
         global $pubjet_settings;
 
         $last_check = pubjet_isset_value($pubjet_settings[EnumOptions::LastCheckingMissedPosts]);
@@ -461,22 +503,22 @@ class Actions extends Singleton {
         }
 
         pubjet_update_setting(EnumOptions::LastCheckingMissedPosts, pubjet_now_ts());
-
-        wp_remote_post(home_url('/wp-json/pubjet/v1/check-missed-reportage'), [
-            'headers'     => [
+        wp_remote_post(home_url(rest_get_url_prefix() . '/pubjet/v1/check-missed-reportage'), [
+            'headers' => [
                 'Authorization' => pubjet_token(),
-                'Content-Type'  => 'application/json',
+                'Content-Type' => 'application/json',
             ],
             'data_format' => 'body',
-            'method'      => 'POST',
-            'body'        => json_encode([]),
+            'method' => 'POST',
+            'body' => json_encode([]),
         ]);
     }
 
     /**
      * @return void
      */
-    public function addScriptToReportage() {
+    public function addScriptToReportage()
+    {
 
         if (!is_singular() || !pubjet_is_reportage(get_the_ID())) {
             return;
@@ -505,13 +547,14 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function adminFooterScripts() {
+    public function adminFooterScripts()
+    {
         global $wpdb;
 
         if (get_current_screen()->id != 'edit-post') {
             return;
         }
-        $posts      = "SELECT COUNT(*) FROM {$wpdb->posts} as posts JOIN {$wpdb->postmeta} as meta ON meta.post_id = posts.ID where posts.post_type = 'post' AND posts.post_status IN ('publish' , 'future' ,'draft' , 'pending') AND meta.meta_key = 'pubjet_reportage_id' ";
+        $posts = "SELECT COUNT(*) FROM {$wpdb->posts} as posts JOIN {$wpdb->postmeta} as meta ON meta.post_id = posts.ID where posts.post_type = 'post' AND posts.post_status IN ('publish' , 'future' ,'draft' , 'pending') AND meta.meta_key = 'pubjet_reportage_id' ";
         $count_post = $wpdb->get_var($posts);
         ?>
         <script>
@@ -525,7 +568,8 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function registerMenu() {
+    public function registerMenu()
+    {
         add_menu_page(
             pubjet__('pubjet'),
             pubjet__('pubjet'),
@@ -540,10 +584,15 @@ class Actions extends Singleton {
     /**
      * @return void
      */
-    public function pubjetSettingsPageCallback() {
+    public function pubjetSettingsPageCallback()
+    {
         pubjet_template('settings');
     }
 
+    /**
+     * @param $post_id
+     * @return void
+     */
     public function savePubjetMetaData($post_id)
     {
         if (!isset($_POST['pubjet_reportage_nonce']) || !wp_verify_nonce($_POST['pubjet_reportage_nonce'], 'pubjet_reportage_nonce_action')) {
@@ -563,19 +612,110 @@ class Actions extends Singleton {
         }
     }
 
+    /**
+     * @return void
+     */
     public function addMetaDataToFrontPages()
     {
         if (!is_single()) return;
 
         global $post;
-        if(pubjet_is_reportage($post->ID)){
-            if(!empty($post->pubjet_meta_title)){
+        if (pubjet_is_reportage($post->ID)) {
+            if (!empty($post->pubjet_meta_title)) {
                 echo '<meta name="title" content="' . esc_attr($post->pubjet_meta_title) . '" />' . "\n";
             }
-            if(!empty($post->pubjet_meta_description)){
+            if (!empty($post->pubjet_meta_description)) {
                 echo '<meta name="description" content="' . esc_attr($post->pubjet_meta_description) . '" />' . "\n";
             }
         }
+    }
+
+
+    /**
+     * @param $post_id
+     * @param $post
+     * @param $update
+     * @param $post_before
+     * @return void
+     */
+    public function sendPermalinkUpdateToApi($post_id, $post, $update, $post_before)
+    {
+        if (!$update || $post->post_type !== 'post' || $post->post_status !== 'publish') return;
+
+        $reportage_id = pubjet_find_reportage_id($post_id);
+        if (empty($reportage_id)) return;
+
+        $old_slug = $post_before->post_name;
+        $new_slug = $post->post_name;
+
+        if ($old_slug !== $new_slug) {
+            $new_url = get_permalink($post_id);
+            send_permalink_change_to_api($post_id, $reportage_id, $new_url);
+        }
+    }
+
+    public function pubjet_reportage_count_clear_cache()
+    {
+        delete_transient('pubjet_reportage_count');
+    }
+
+    public function pubjet_clear_cache_on_meta_update($meta_id, $post_id, $meta_key)
+    {
+        if ($meta_key === 'pubjet_reportage_id') {
+            $this->pubjet_reportage_count_clear_cache();
+        }
+    }
+
+    public function pubjet_clear_cache_on_meta_delete($meta_ids) {
+        if (is_array($meta_ids)) {
+            foreach ($meta_ids as $meta_data) {
+                if (isset($meta_data['key']) && $meta_data['key'] === 'pubjet_reportage_id') {
+                    $this->pubjet_reportage_count_clear_cache();
+                    break;
+                }
+            }
+        }
+    }
+
+    public function clear_reportage_cdn_cache($post_id) {
+        if (wp_is_post_revision($post_id)) {
+            return;
+        }
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        $cache_key = 'pubjet_cdn_content_' . $post_id;
+        delete_transient($cache_key);
+    }
+    public function save_cdn_checkbox($post_id) {
+
+        if (!isset($_POST['pubjet_cdn_nonce']) || !wp_verify_nonce($_POST['pubjet_cdn_nonce'], 'pubjet_cdn_nonce_action')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        if (isset($_POST['pubjet_use_cdn']) && $_POST['pubjet_use_cdn'] == '1') {
+            update_post_meta($post_id, 'pubjet_use_cdn', true);
+        } else {
+            delete_post_meta($post_id, 'pubjet_use_cdn');
+        }
+    }
+
+    public function clearMetaCacheOnSave($post_id, $post, $update) {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+        wp_cache_delete("pubjet_meta_$post_id", 'pubjet');
     }
 
 }

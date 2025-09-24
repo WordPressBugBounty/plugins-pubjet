@@ -1013,7 +1013,7 @@ function pubjet_find_authors() {
     $result = [];
 
     foreach ($users as $user) {
-        $result[] = [
+        $result[$user->ID] = [
             'ID'           => $user->ID,
             'user_login'   => $user->user_login,
             'display_name' => $user->display_name,
@@ -1024,7 +1024,7 @@ function pubjet_find_authors() {
      *
      * @since 1.0.0
      */
-    return apply_filters('pubjet_authors', $result);
+    return apply_filters('pubjet_authors', array_values($result));
 }
 
 /**
@@ -1106,9 +1106,6 @@ function pubjet_is_request_token_valid() {
         return new \WP_Error('missing-token', pubjet__('missing-token'));
     }
     $request_token = pubjet_get_server_var('authorization');
-    pubjet_log('request token : ' . $request_token);
-    pubjet_log('pubjet token : ' . pubjet_token());
-
     if ($request_token === pubjet_token()) {
         return true;
     }
@@ -1429,6 +1426,9 @@ function pubjet_sync_categories() {
 }
 
 
+/**
+ * @return void
+ */
 function pubjet_sync_settings() {
     pubjet_log("===== synSettingsAfterUpdate ===== ");
     $category = pubjet_is_dev_mode() ? 1 : null;
@@ -1447,15 +1447,16 @@ function pubjet_sync_settings() {
         if ($category !== 1) {
             $pubjet_settings['manualApprove'] = false;
         }
-        pubjet_log(['publisher Category' => $category]);
         update_option(EnumOptions::Settings, $pubjet_settings);
     }
-    pubjet_log(["publisherCategory" => $category]);
 
 }
 
 /*
  * @return array
+ */
+/**
+ * @return mixed|null
  */
 function pubjet_default_settings() {
     /**
@@ -1610,15 +1611,15 @@ function pubjet_send_plugin_status_to_api($status) {
     $url = apply_filters('pubjet_send_plugin_status_url', pubjet_api_root() . '/external/wp/pubjet-info/', pubjet_token());
 
     $request_data = [
-        'status'                   => $status,
-        'pubjet_version'           => PUBJ()->getVersion(),
-        'backlink_recipient_path'  => pubjet_isset_value($settings['processDataByQueryString']) ? '?action=' . EnumActions::CreateBacklink      : rest_get_url_prefix()     . '/pubjet/v1/backlink',
-        'reportage_recipient_path' => pubjet_isset_value($settings['processDataByQueryString']) ? '?action=' . EnumActions::CreateReportage     : rest_get_url_prefix()     . '/pubjet/v1/reportage',
-        'status_recipient_path'    => pubjet_isset_value($settings['processDataByQueryString']) ? '?action=' . EnumActions::PubjetStatus        : rest_get_url_prefix()     . '/pubjet/v1/status',
-        'category_recipient_path'  => pubjet_isset_value($settings['processDataByQueryString']) ? '?action=' . EnumActions::PubjetCategories    : rest_get_url_prefix()     . '/pubjet/v1/site/categories',
-        'pubjet_data'              => [
-            'manualApprove'             => pubjet_isset_value($settings['manualApprove'], 0),
-            'reportage_without_tags'    => pubjet_isset_value($settings['addReportageTags'], 0),
+        'status' => $status,
+        'pubjet_version' => PUBJ()->getVersion(),
+        'backlink_recipient_path'   => get_pubjet_path('pubjet/v1/backlink',        EnumActions::CreateBacklink, $settings),
+        'reportage_recipient_path'  => get_pubjet_path('pubjet/v1/reportage',       EnumActions::CreateReportage, $settings),
+        'status_recipient_path'     => get_pubjet_path('pubjet/v1/status',          EnumActions::PubjetStatus, $settings),
+        'category_recipient_path'   => get_pubjet_path('pubjet/v1/site/categories', EnumActions::PubjetCategories, $settings),
+        'pubjet_data' => [
+            'manualApprove' => pubjet_isset_value($settings['manualApprove'], 0),
+            'reportage_without_tags' => pubjet_isset_value($settings['addReportageTags'], 0),
         ]
     ];
     pubjet_log($request_data);
@@ -1733,6 +1734,9 @@ function pubjet_publish_backlink_request($backlink_id) {
 }
 
 
+/**
+ * @return int|mixed
+ */
 function pubjet_check_new_version() {
 
     $plugin_updates = get_site_transient( 'update_plugins' );
@@ -1951,4 +1955,206 @@ function pubjet_validate_pricing_plans(array $pricingPlans): void
             ));
         }
     }
+}
+
+/**
+ * @param $post_id
+ * @param $reportage_id
+ * @param $new_url
+ * @return array|void|WP_Error
+ */
+function send_permalink_change_to_api($post_id, $reportage_id, $new_url) {
+    if (empty(trim(pubjet_token()))) return;
+
+    pubjet_log('====== START Update Permalink ======');
+    pubjet_log('Post ID: ' . $post_id);
+    pubjet_log('Reportage ID: ' . $reportage_id);
+    pubjet_log('New URL: ' . $new_url);
+
+    $url = apply_filters('pubjet_update_permalink_endpoint', pubjet_api_root() . '/external/wp/reportages/' . $reportage_id . '/update-url/', $post_id , $reportage_id);
+
+    $headers = [
+        'Content-Type'  => 'application/json',
+        'Authorization' => 'Token ' . trim(pubjet_token()),
+    ];
+
+    $body = ['url' => $new_url];
+
+    $args = [
+        'timeout' => 30,
+        'body' => json_encode($body),
+        'headers' => $headers,
+        'method' => 'POST'
+    ];
+
+    $result = pubjet_request($url, EnumHttpMethods::POST, $headers, $body, $args);
+
+    pubjet_log('====== END Update Permalink ======');
+
+    if (is_wp_error($result)) {
+        pubjet_log('Error: ' . $result->get_error_message());
+        return new \WP_Error('error', $result->get_error_message());
+    }
+
+    if (isset($result['code']) && 403 == $result['code']) {
+        return new \WP_Error('error', pubjet__('invalid-token'));
+    }
+
+    if (isset($result['code']) && 404 == $result['code']) {
+        return new \WP_Error('error', pubjet__('invalid-reportageId'));
+    }
+
+    pubjet_log('Success: Permalink updated successfully');
+    return $result;
+}
+
+/**
+ * @return int
+ */
+function pubjet_get_reportage_count(): int
+{
+    $count = get_transient('pubjet_reportage_count');
+
+    if ($count === false) {
+        global $wpdb;
+
+        $count = $wpdb->get_var($wpdb->prepare("
+            SELECT COUNT(p.ID) 
+            FROM {$wpdb->posts} p 
+            JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+            WHERE p.post_type = 'post' 
+            AND p.post_status IN ('publish', 'future', 'draft', 'pending') 
+            AND pm.meta_key = %s
+        ", 'pubjet_reportage_id'));
+
+        // کش برای 30 دقیقه
+        set_transient('pubjet_reportage_count', $count, 30 * MINUTE_IN_SECONDS);
+    }
+
+    return (int) $count;
+}
+
+
+/**
+ * @return mixed|string
+ */
+function get_current_subdomain()
+{
+    $admin_url = admin_url('admin-ajax.php');
+    $parsed_admin = parse_url($admin_url);
+
+    $current_host = $_SERVER['HTTP_HOST'];
+
+
+    if ($current_host !== $parsed_admin['host']) {
+        return $current_host;
+    }
+
+    $admin_path = $parsed_admin['path'];
+    $wp_base_path = str_replace('/wp-admin/admin-ajax.php', '', $admin_path);
+
+    if ($wp_base_path && $wp_base_path !== '') {
+        return trim($wp_base_path, '/');
+    }
+    return '';
+}
+
+/**
+ * @param $endpoint
+ * @param $action
+ * @param $settings
+ * @return string
+ */
+
+function get_pubjet_path($endpoint, $action, $settings)
+{
+    $base_url    = get_current_subdomain();
+    $rest_prefix = rest_get_url_prefix();
+    $use_query   = pubjet_isset_value($settings['processDataByQueryString']);
+
+    if ($use_query) {
+        $full_path = ($base_url ? $base_url . '/' : '') . '?action=' . $action;
+    } else {
+        $full_path = ($base_url ? $base_url . '/' : '') . $rest_prefix . '/' . $endpoint;
+    }
+
+    return $full_path;
+}
+
+/**
+ * @return void
+ */
+function pubjet_delete_first_image_option() {
+    error_log("pubjet_delete_first_image_option");
+    if (get_option('pubjet_migration_delete_first_image_v530') !== 'completed') {
+        global $pubjet_settings;
+        if (isset($pubjet_settings['deleteFirstImage'])) {
+            migrate_delete_first_image_option();
+        } else {
+            update_option('pubjet_migration_delete_first_image_v530', 'completed');
+        }
+    }
+}
+
+/**
+ * @return void
+ */
+function migrate_delete_first_image_option() {
+    pubjet_log("migrate delete first image");
+
+    global $pubjet_settings, $wpdb;
+
+    $post_ids = $wpdb->get_col($wpdb->prepare("
+                                SELECT DISTINCT p.ID 
+                                FROM {$wpdb->posts} p
+                                INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                                WHERE p.post_type = %s
+                                AND p.post_status IN ('publish', 'draft', 'private', 'pending')
+                                AND pm.meta_key = %s
+                            ", PUBJET_POST_TYPE, 'pubjet_reportage_id'));
+
+    if (!empty($post_ids)) {
+        $insert_values = array();
+        $delete_first_image_value = !empty($pubjet_settings['deleteFirstImage']) ? '1' : '0';
+
+        foreach ($post_ids as $post_id) {
+            $insert_values[] = $wpdb->prepare(
+                "(%d, %s, %s)",
+                (int)$post_id,
+                'pubjet_delete_first_image',
+                $delete_first_image_value
+            );
+        }
+
+        if (!empty($insert_values)) {
+            $values_string = implode(',', $insert_values);
+            $post_ids_string = implode(',', array_map('intval', $post_ids));
+
+            try {
+                $wpdb->query("
+                            DELETE FROM {$wpdb->postmeta} 
+                            WHERE post_id IN ({$post_ids_string}) 
+                            AND meta_key = 'pubjet_delete_first_image'
+                    ");
+
+                $wpdb->query("
+                            INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value) 
+                            VALUES {$values_string}
+                        ");
+
+                if (PUBJET_DEBUG_MODE) {
+                    pubjet_log("Pubjet Migration v5.3.0: حذف اولین عکس - " . count($post_ids) . " پست پردازش شد");
+                }
+
+            } catch (Exception $e) {
+                if (PUBJET_DEBUG_MODE) {
+                    pubjet_log('Pubjet Migration Error: ' . $e->getMessage());
+                }
+            }
+        }
+    }
+
+    update_option('pubjet_migration_delete_first_image_v530', 'completed');
+    unset($pubjet_settings['deleteFirstImage']);
+    update_option(EnumOptions::Settings,$pubjet_settings);
 }
