@@ -1,13 +1,13 @@
 <?php return array(
     'root' => array(
         'name' => 'triboon/pubjet',
-        'pretty_version' => 'dev-master',
-        'version' => 'dev-master',
-        'reference' => '8e86e1a73547838036b1769a7ca56b65a44cc799',
+        'pretty_version' => 'dev-dev',
+        'version' => 'dev-dev',
+        'reference' => '2192b37a88a6fbd2d57c3de9717832227ee3eee2',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'guzzlehttp/psr7' => array(
@@ -113,9 +113,9 @@
             'dev_requirement' => false,
         ),
         'triboon/pubjet' => array(
-            'pretty_version' => 'dev-master',
-            'version' => 'dev-master',
-            'reference' => '8e86e1a73547838036b1769a7ca56b65a44cc799',
+            'pretty_version' => 'dev-dev',
+            'version' => 'dev-dev',
+            'reference' => '2192b37a88a6fbd2d57c3de9717832227ee3eee2',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -32,7 +32,6 @@ class Ajax extends Singleton
         $this->ajax('find-terms', [$this, 'findTerms'], EnumAjaxPrivType::LoggedIn);
         $this->ajax('categories', [$this, 'findWpCategories'], EnumAjaxPrivType::LoggedIn);
         $this->ajax('remind-admin-notice', [$this, 'remindAdminNotice'], EnumAjaxPrivType::LoggedIn);
-        $this->ajax('sync-categories', [$this, 'syncAndSaveCategories'], EnumAjaxPrivType::LoggedIn);
         $this->ajax('find-authors', [$this, 'findAuthors'], EnumAjaxPrivType::LoggedIn);
         $this->ajax('save-reportage-author', [$this, 'saveReportageAuthor'], EnumAjaxPrivType::LoggedIn);
 
@@ -89,20 +88,6 @@ class Ajax extends Singleton
         $authors = pubjet_find_authors();
 
         $this->success($authors);
-    }
-
-    /**
-     * @return void
-     */
-    public function syncAndSaveCategories()
-    {
-        global $pubjet_settings;
-        $this->checkNonce();
-        $categories = $this->post('categories');
-        pubjet_update_setting('categories', trim($categories));
-        $pubjet_settings['categories'] = $categories ?? [];
-        pubjet_sync_categories();
-        $this->success();
     }
 
     /**
@@ -369,13 +354,15 @@ class Ajax extends Singleton
         ];
         $post_content = ReportagePost::get_content_file((object)$reportage);
 
-        $lead_image = pubjet_isset_value($triboon_panel_reportage_data->lead_image);
+        $lead_image_obj = (object) ((array) ($triboon_panel_reportage_data->lead_image_obj ?? []));
+        $lead_image     = $lead_image_obj->image ?? ($triboon_panel_reportage_data->lead_image ?? '');
+        $lead_image_alt = sanitize_text_field($lead_image_obj->alt_tag ?? '');
 
         $response = [];
 
         // Process images based on type
         if ($type === 'thumbnail' || $type === 'both') {
-            $thumbnail_result = $this->processThumbnail($post, $post_content, $lead_image);
+            $thumbnail_result = $this->processThumbnail($post, $post_content, $lead_image ,$lead_image_alt);
             $response['thumbnail'] = $thumbnail_result;
         }
 
@@ -387,15 +374,13 @@ class Ajax extends Singleton
         $this->success($response);
     }
 
-    private function processThumbnail($post, $post_content, $lead_image)
+    private function processThumbnail($post, $post_content, $lead_image , $lead_image_alt = null)
     {
-        $post_thumbnail = ReportagePost::upload_from_url($lead_image);
+        $post_thumbnail = $lead_image
+            ? ReportagePost::upload_from_url($lead_image, $lead_image_alt)
+            : intval(ReportagePost::handle_images($post_content, true)['featured_img_id'] ?? 0);
 
-        $content = ReportagePost::handle_images($post_content, true);
-
-        $final_thumbnail_id = $post_thumbnail ?: intval($content['featured_img_id'] ?? 0);
-
-        if (empty($final_thumbnail_id)) {
+        if (empty($post_thumbnail)) {
             pubjet_log('Error creating post thumbnail for post ID: ' . $post->ID);
             return [
                 'success' => false,
@@ -408,12 +393,15 @@ class Ajax extends Singleton
             wp_delete_attachment($post_attach_id, true);
         }
 
-        set_post_thumbnail($post->ID, $final_thumbnail_id);
+        set_post_thumbnail($post->ID, $post_thumbnail);
+
+        $alt_text = $lead_image_alt ?: $post->post_title;
+        update_post_meta($post_thumbnail, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
 
         return [
             'success'       => true,
-            'attachment_id' => $final_thumbnail_id,
-            'url'           => wp_get_attachment_url($final_thumbnail_id)
+            'attachment_id' => $post_thumbnail,
+            'url'           => wp_get_attachment_url($post_thumbnail)
         ];
     }
 

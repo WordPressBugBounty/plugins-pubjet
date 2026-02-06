@@ -146,7 +146,7 @@ class Filters extends Singleton {
         if(!pubjet_is_reportage($post_id)) return $content;
 
         $cache_key = "pubjet_meta_$post_id";
-        $meta_cache = wp_cache_get($cache_key, 'pubjet');
+        $meta_cache = get_transient($cache_key);
 
         if ($meta_cache === false) {
             $meta_data = $wpdb->get_results($wpdb->prepare("
@@ -156,19 +156,22 @@ class Filters extends Singleton {
                 AND meta_key IN ('pubjet_reportage_id', 'pubjet_delete_first_image')
             ", $post_id), OBJECT_K);
 
+            $delete_value = isset($meta_data[EnumPostMetakeys::deleteFirstImage])
+                ? $meta_data[EnumPostMetakeys::deleteFirstImage]->meta_value
+                : '0';
+
             $meta_cache = [
                 'has_reportage'      => isset($meta_data[EnumPostMetakeys::ReportageId]),
-                'delete_first_image' => isset($meta_data[EnumPostMetakeys::deleteFirstImage])
-                    ? 1
-                    : false
+                'delete_first_image' => ($delete_value === '1' || $delete_value === 1)
             ];
 
-            wp_cache_set($cache_key, $meta_cache, 'pubjet', HOUR_IN_SECONDS);
+            set_transient($cache_key, $meta_cache, HOUR_IN_SECONDS);
         }
 
         if (!$meta_cache['has_reportage'] || !$meta_cache['delete_first_image']) {
             return $content;
         }
+
 
         $pattern_p = '/<p[^>]*>\s*(?:<strong[^>]*>\s*)?<img[^>]*>(?:\s*<\/strong>)?\s*<\/p>/i';
         if (preg_match($pattern_p, $content)) {
@@ -176,7 +179,10 @@ class Filters extends Singleton {
         }
 
         $pattern_img = '/<img[^>]*>/i';
-        return preg_replace($pattern_img, '', $content, 1);
+        if (preg_match($pattern_img, $content)) {
+            return preg_replace($pattern_img, '', $content, 1);
+        }
+        return $content;
     }
 
 
@@ -393,7 +399,7 @@ class Filters extends Singleton {
             '<a href="%s" class="%s">%s <span class="count">(%d)</span></a>',
             admin_url('edit.php?post_type=post&reportage=true'),
             $current_class,
-            pubjet__('reportage'),
+            pubjet__('triboon-reportage'),
             $count
         );
 
@@ -447,7 +453,7 @@ class Filters extends Singleton {
      * @param $attr
      * @return array|string|string[]|null
      */
-    public function useCdnForFeaturedImage($html, $post_id, $post_thumbnail_id, $size, $attr) {
+    public function useCdnForFeaturedImage($html, $post_id = null, $post_thumbnail_id = null, $size = null, $attr = null) {
         if (!pubjet_is_reportage($post_id)) return $html;
 
         $use_cdn = get_post_meta($post_id, 'pubjet_use_cdn', true);
