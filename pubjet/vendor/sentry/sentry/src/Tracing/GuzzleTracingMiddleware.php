@@ -15,7 +15,6 @@ use Sentry\State\HubInterface;
 
 use function Sentry\getBaggage;
 use function Sentry\getTraceparent;
-use function Sentry\getW3CTraceparent;
 
 /**
  * This handler traces each outgoing HTTP request by recording performance data.
@@ -54,38 +53,55 @@ final class GuzzleTracingMiddleware
                 if ($parentSpan !== null && $parentSpan->getSampled()) {
                     $spanContext = new SpanContext();
                     $spanContext->setOp('http.client');
-                    $spanContext->setDescription($request->getMethod() . ' ' . $partialUri);
                     $spanContext->setData($spanAndBreadcrumbData);
+                    $spanContext->setOrigin('auto.http.guzzle');
+                    $spanContext->setDescription($request->getMethod() . ' ' . $partialUri);
 
                     $childSpan = $parentSpan->startChild($spanContext);
+
+                    $hub->setSpan($childSpan);
                 }
 
                 if (self::shouldAttachTracingHeaders($client, $request)) {
-                    $request = $request
-                        ->withHeader('sentry-trace', getTraceparent())
-                        ->withHeader('traceparent', getW3CTraceparent())
-                        ->withHeader('baggage', getBaggage());
+                    $traceParent = getTraceparent();
+                    if ($traceParent !== '') {
+                        $request = $request->withHeader('sentry-trace', $traceParent);
+                    }
+
+                    $baggage = getBaggage();
+                    if ($baggage !== '') {
+                        $request = $request->withHeader('baggage', $baggage);
+                    }
                 }
 
-                $handlerPromiseCallback = static function ($responseOrException) use ($hub, $spanAndBreadcrumbData, $childSpan, $partialUri) {
+                $handlerPromiseCallback = static function ($responseOrException) use ($hub, $spanAndBreadcrumbData, $childSpan, $parentSpan, $partialUri) {
                     if ($childSpan !== null) {
                         // We finish the span (which means setting the span end timestamp) first to ensure the measured time
                         // the span spans is as close to only the HTTP request time and do the data collection afterwards
                         $childSpan->finish();
+
+                        $hub->setSpan($parentSpan);
                     }
 
                     $response = null;
 
-                    /** @psalm-suppress UndefinedClass */
                     if ($responseOrException instanceof ResponseInterface) {
                         $response = $responseOrException;
-                    } elseif ($responseOrException instanceof GuzzleRequestException) {
+                    } elseif ($responseOrException instanceof GuzzleRequestException && method_exists($responseOrException, 'getResponse')) {
                         $response = $responseOrException->getResponse();
                     }
+
+                    $breadcrumbLevel = Breadcrumb::LEVEL_INFO;
 
                     if ($response !== null) {
                         $spanAndBreadcrumbData['http.response.body.size'] = $response->getBody()->getSize();
                         $spanAndBreadcrumbData['http.response.status_code'] = $response->getStatusCode();
+
+                        if ($response->getStatusCode() >= 400 && $response->getStatusCode() < 500) {
+                            $breadcrumbLevel = Breadcrumb::LEVEL_WARNING;
+                        } elseif ($response->getStatusCode() >= 500) {
+                            $breadcrumbLevel = Breadcrumb::LEVEL_ERROR;
+                        }
                     }
 
                     if ($childSpan !== null) {
@@ -98,7 +114,7 @@ final class GuzzleTracingMiddleware
                     }
 
                     $hub->addBreadcrumb(new Breadcrumb(
-                        Breadcrumb::LEVEL_INFO,
+                        $breadcrumbLevel,
                         Breadcrumb::TYPE_HTTP,
                         'http',
                         null,
